@@ -40,8 +40,8 @@ for i in range(iteration):
 	for n in range(len(x_data)):
 		b_grad = b_grad - 2.0*(y_data[n] - b - w*x_data[n])*1.0
 		w_grad = w_grad - 2.0*(y_data[n] - b - w*x_data[n])*x_data[n]
-	b_grad = b_grad / len(x_data)
-	w_grad = w_grad / len(x_data)
+	"""b_grad = b_grad / len(x_data)
+	w_grad = w_grad / len(x_data)"""
 
 	lr_b = lr_b + b_grad ** 2
 	lr_w = lr_w + w_grad ** 2

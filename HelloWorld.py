@@ -21,7 +21,7 @@ x_test = x_test.reshape(x_test.shape[0], num_pixel)"""
 def load_data():
 	(x_train, y_train), (x_test, y_test) = mnist.load_data()
 
-	number = 10000
+	number = 30000
 	x_train = x_train[0:number]
 	y_train = y_train[0:number]
 	x_train = x_train.reshape(number, 28*28)
@@ -52,6 +52,10 @@ model.compile(loss = 'categorical_crossentropy', optimizer = 'adam', metrics = [
 
 model.fit(x_train, y_train, batch_size = 2000, epochs = 20)
 
+score = model.evaluate(x_train, y_train)
+
+print '\nTraining accuracy:', score[1]
+
 score = model.evaluate(x_test, y_test)
 
-print '\nFinal accuracy:', score[1]
+print '\nTesting accuracy:', score[1]

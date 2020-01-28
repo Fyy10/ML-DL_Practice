@@ -2,11 +2,13 @@
 import unicodedata
 import re
 import random
+from config import *
 
 SOS_token = 0   # start of sequence
 EOS_token = 1   # end of sequence
 
 MAX_LENGTH = 10     # trim the data set to only short and simple sentences (maximum words including ending punctuation)
+Config.max_length = MAX_LENGTH
 
 eng_prefixes = (
     "i am", "i m",

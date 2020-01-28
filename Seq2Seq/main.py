@@ -69,13 +69,13 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     if use_teacher_forcing:
         # Teacher forcing: Feed the target as the next input
         for di in range(target_length):
-            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
             loss += criterion(decoder_output, target_tensor[di])
             decoder_input = target_tensor[di]   # teacher forcing
     else:
         # Without teacher forcing: use its own predictions as the next input
         for di in range(target_length):
-            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
+            decoder_output, decoder_hidden, decoder_attention = decoder(decoder_input, decoder_hidden, encoder_outputs)
             topv, topi = decoder_output.topk(1)
             decoder_input = topi.squeeze().detach()     # detach from history as input
 
@@ -182,7 +182,8 @@ def main():
     print(random.choice(pairs))
 
     encoder = Encoder(input_lang.n_words, Config.hidden_dim).to(Config.device)
-    decoder = Decoder(Config.hidden_dim, output_lang.n_words).to(Config.device)
+    # decoder = Decoder(Config.hidden_dim, output_lang.n_words).to(Config.device)
+    decoder = AttnDecoder(Config.hidden_dim, output_lang.n_words).to(Config.device)
 
     trainIters(encoder, decoder, 50000, input_lang, output_lang, pairs)
     evaluateRandomly(encoder, decoder, input_lang, output_lang, pairs)

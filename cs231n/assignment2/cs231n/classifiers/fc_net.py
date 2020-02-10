@@ -190,8 +190,11 @@ class FullyConnectedNet(object):
 
         layer_in_dim = input_dim
         for i, hd in enumerate(hidden_dims):
-            self.params['W%d'%(i+1)] = weight_scale * np.random.randn(layer_in_dim, hd)
-            self.params['b%d'%(i+1)] = np.zeros(hd)
+            self.params['W%d' % (i+1)] = weight_scale * np.random.randn(layer_in_dim, hd)
+            self.params['b%d' % (i+1)] = np.zeros(hd)
+            if self.normalization:
+                self.params['gamma%d' % (i+1)] = np.ones(hd)
+                self.params['beta%d' % (i+1)] = np.zeros(hd)
             layer_in_dim = hd
         self.params['W%d' % self.num_layers] = weight_scale * np.random.randn(layer_in_dim, num_classes)
         self.params['b%d' % self.num_layers] = np.zeros(num_classes)
@@ -259,9 +262,24 @@ class FullyConnectedNet(object):
         layer_input = X
         in_cache = {}
         for lay in range(self.num_layers-1):
-            layer_input, in_cache[lay+1] = affine_relu_forward(layer_input,
-                                                             self.params['W%d' % (lay+1)],
-                                                             self.params['b%d' % (lay+1)])
+            if self.normalization == 'batchnorm':
+                layer_input, in_cache[lay+1] = affine_bn_relu_forward(layer_input,
+                                                                      self.params['W%d' % (lay+1)],
+                                                                      self.params['b%d' % (lay+1)],
+                                                                      self.params['gamma%d' % (lay+1)],
+                                                                      self.params['beta%d' % (lay+1)],
+                                                                      self.bn_params[lay])
+            elif self.normalization == 'layernorm':
+                layer_input, in_cache[lay+1] = affine_ln_relu_forward(layer_input,
+                                                                      self.params['W%d' % (lay+1)],
+                                                                      self.params['b%d' % (lay+1)],
+                                                                      self.params['gamma%d' % (lay+1)],
+                                                                      self.params['beta%d' % (lay+1)],
+                                                                      self.bn_params[lay])  # use bn here (see __init__)
+            else:
+                layer_input, in_cache[lay+1] = affine_relu_forward(layer_input,
+                                                                   self.params['W%d' % (lay+1)],
+                                                                   self.params['b%d' % (lay+1)])
         scores, in_cache[self.num_layers] = affine_forward(layer_input,
                                                            self.params['W%d' % self.num_layers],
                                                            self.params['b%d' % self.num_layers])
@@ -301,9 +319,17 @@ class FullyConnectedNet(object):
         for idx in range(self.num_layers-1):
             lay_idx = self.num_layers - idx - 1
             loss += 0.5 * self.reg * np.sum(self.params['W%d' % lay_idx] ** 2)
-            dx, dw, db = affine_relu_backward(dhout, in_cache[lay_idx])
+            if self.normalization == 'batchnorm':
+                dx, dw, db, dgamma, dbeta = affine_bn_relu_backward(dhout, in_cache[lay_idx])
+            elif self.normalization == 'layernorm':
+                dx, dw, db, dgamma, dbeta = affine_ln_relu_backward(dhout, in_cache[lay_idx])
+            else:
+                dx, dw, db = affine_relu_backward(dhout, in_cache[lay_idx])
             grads['W%d' % lay_idx] = dw + self.reg * self.params['W%d' % lay_idx]
             grads['b%d' % lay_idx] = db
+            if self.normalization:
+                grads['gamma%d' % lay_idx] = dgamma
+                grads['beta%d' % lay_idx] = dbeta
             dhout = dx
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****

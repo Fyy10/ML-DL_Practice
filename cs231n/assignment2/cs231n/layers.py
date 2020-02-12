@@ -549,7 +549,23 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    stride, pad = conv_param['stride'], conv_param['pad']
+    H_prime = 1 + (H + 2 * pad - HH) / stride
+    W_prime = 1 + (W + 2 * pad - WW) / stride
+    H_prime = int(H_prime)
+    W_prime = int(W_prime)
+    out = np.zeros((N, F, H_prime, W_prime))
+    x_pad = np.pad(x, ((0,), (0,), (pad,), (pad,)), mode='constant', constant_values=0)
+    for i in range(H_prime):
+        for j in range(W_prime):
+            x_pad_conv = x_pad[:, :, i * stride: i * stride + HH, j * stride: j * stride + WW]  # (N, C, HH, WW)
+            for f in range(F):
+                out[:, f, i, j] = np.sum(x_pad_conv * w[f, :, :, :], axis=(1, 2, 3))    # out: (N, C, H_prime, W_prime)
+
+    # add bias
+    out = out + b[None, :, None, None]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -578,7 +594,41 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, w, b, conv_param = cache
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    stride, pad = conv_param['stride'], conv_param['pad']
+
+    # H_out, W_out == HH, WW (assume)
+    H_out = 1 + (H + 2 * pad - HH) / stride
+    W_out = 1 + (W + 2 * pad - WW) / stride
+    H_out = int(H_out)
+    W_out = int(W_out)
+
+    x_pad = np.pad(x, ((0,), (0,), (pad,), (pad,)), mode='constant', constant_values=0)
+
+    dx = np.zeros_like(x)
+    dw = np.zeros_like(w)
+    db = np.zeros_like(b)
+    dx_pad = np.zeros_like(x_pad)
+
+    # dout: (N, F, H_out, W_out)
+    # db: (F,)
+    db = np.sum(dout, axis=(0, 2, 3))
+
+    for i in range(H_out):
+        for j in range(W_out):
+            x_pad_conv = x_pad[:, :, i * stride: i * stride + HH, j * stride: j * stride + WW]  # (N, C, HH, WW)
+            for f in range(F):
+                # dw[f, :, :, :] (C, HH/H_out, WW/W_out)
+                dw[f, :, :, :] += np.sum(x_pad_conv * (dout[:, f, i, j])[:, None, None, None], axis=0)
+            for n in range(N):
+                # dx_pad[...] (C, HH, WW)
+                # w (F, C, HH, WW)
+                # dout (N, F, H_out/HH, W_out/WW)
+                dx_pad[n, :, i * stride: i * stride + HH, j * stride: j * stride + WW] +=\
+                    np.sum(w * (dout[n, :, i, j])[:, None, None, None], axis=0)
+    dx = dx_pad[:, :, pad: -pad, pad: -pad]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################

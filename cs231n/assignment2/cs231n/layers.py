@@ -554,6 +554,8 @@ def conv_forward_naive(x, w, b, conv_param):
     stride, pad = conv_param['stride'], conv_param['pad']
     H_prime = 1 + (H + 2 * pad - HH) / stride
     W_prime = 1 + (W + 2 * pad - WW) / stride
+    assert H_prime == int(H_prime)
+    assert W_prime == int(W_prime)
     H_prime = int(H_prime)
     W_prime = int(W_prime)
     out = np.zeros((N, F, H_prime, W_prime))
@@ -602,6 +604,8 @@ def conv_backward_naive(dout, cache):
     # H_out, W_out == HH, WW (assume)
     H_out = 1 + (H + 2 * pad - HH) / stride
     W_out = 1 + (W + 2 * pad - WW) / stride
+    assert H_out == int(H_out)
+    assert W_out == int(W_out)
     H_out = int(H_out)
     W_out = int(W_out)
 
@@ -662,7 +666,22 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    stride, pool_height, pool_width = pool_param['stride'], pool_param['pool_height'], pool_param['pool_width']
+
+    H_prime = 1 + (H - pool_height) / stride
+    W_prime = 1 + (W - pool_width) / stride
+    assert H_prime == int(H_prime)
+    assert W_prime == int(W_prime)
+    H_prime = int(H_prime)
+    W_prime = int(W_prime)
+
+    out = np.zeros((N, C, H_prime, W_prime))
+
+    for i in range(H_prime):
+        for j in range(W_prime):
+            x_pool = x[:, :, i * stride: i * stride + pool_height, j * stride: j * stride + pool_width]
+            out[:, :, i, j] = np.max(x_pool, axis=(2, 3))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -689,7 +708,25 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # x, pool_param = cache
+    # N, C, H, W = x.shape
+    # stride, pool_height, pool_width = pool_param['stride'], pool_param['pool_height'], pool_param['pool_width']
+    #
+    # H_prime = 1 + (H - pool_height) / stride
+    # W_prime = 1 + (W - pool_width) / stride
+    # assert H_prime == int(H_prime)
+    # assert W_prime == int(W_prime)
+    # H_prime = int(H_prime)
+    # W_prime = int(W_prime)
+    #
+    # dx = np.zeros_like(x)
+    #
+    # # dout: (N, C, H_prime, W_prime)
+    #
+    # for i in range(H_prime):
+    #     for j in range(W_prime):
+    #         x_pool = x[:, :, i * stride: i * stride + pool_height, j * stride: j * stride + pool_width]
+    #         out[:, :, i, j] = np.max(x_pool, axis=(2, 3))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################

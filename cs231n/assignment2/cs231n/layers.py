@@ -708,25 +708,30 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    # x, pool_param = cache
-    # N, C, H, W = x.shape
-    # stride, pool_height, pool_width = pool_param['stride'], pool_param['pool_height'], pool_param['pool_width']
-    #
-    # H_prime = 1 + (H - pool_height) / stride
-    # W_prime = 1 + (W - pool_width) / stride
-    # assert H_prime == int(H_prime)
-    # assert W_prime == int(W_prime)
-    # H_prime = int(H_prime)
-    # W_prime = int(W_prime)
-    #
-    # dx = np.zeros_like(x)
-    #
-    # # dout: (N, C, H_prime, W_prime)
-    #
-    # for i in range(H_prime):
-    #     for j in range(W_prime):
-    #         x_pool = x[:, :, i * stride: i * stride + pool_height, j * stride: j * stride + pool_width]
-    #         out[:, :, i, j] = np.max(x_pool, axis=(2, 3))
+    x, pool_param = cache
+    N, C, H, W = x.shape
+    stride, pool_height, pool_width = pool_param['stride'], pool_param['pool_height'], pool_param['pool_width']
+
+    H_prime = 1 + (H - pool_height) / stride
+    W_prime = 1 + (W - pool_width) / stride
+    assert H_prime == int(H_prime)
+    assert W_prime == int(W_prime)
+    H_prime = int(H_prime)
+    W_prime = int(W_prime)
+
+    dx = np.zeros_like(x)
+
+    # dout: (N, C, H_prime, W_prime)
+
+    for i in range(H_prime):
+        for j in range(W_prime):
+            x_pool = x[:, :, i * stride: i * stride + pool_height, j * stride: j * stride + pool_width]
+            # only the max values will make change to dout
+            max_x_pool = np.max(x_pool, axis=(2, 3))
+            # binary max mask
+            mask_max_x_pool = (x_pool == max_x_pool[:, :, None, None])
+            dx[:, :, i * stride: i * stride + pool_height, j * stride: j * stride + pool_width] +=\
+                mask_max_x_pool * (dout[:, :, i, j])[:, :, None, None]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################

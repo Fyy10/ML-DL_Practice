@@ -1,7 +1,8 @@
-from distutils.core import setup
-from distutils.extension import Extension
+# from distutils.core import setup
+# from distutils.extension import Extension
 from Cython.Build import cythonize
 import numpy
+from setuptools import setup, Extension
 
 extensions = [
   Extension('im2col_cython', ['im2col_cython.pyx'],

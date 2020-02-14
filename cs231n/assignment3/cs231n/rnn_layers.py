@@ -36,7 +36,9 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    before_act = np.dot(prev_h, Wh) + np.dot(x, Wx) + b     # (N, H)
+    next_h = np.tanh(before_act)
+    cache = (x, prev_h, Wx, Wh, b, next_h)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -69,7 +71,13 @@ def rnn_step_backward(dnext_h, cache):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, prev_h, Wx, Wh, b, next_h = cache
+    dbefore_act = dnext_h * (1 - next_h ** 2)   # (N, H)
+    dx = np.dot(dbefore_act, Wx.T)              # (N, D)
+    dprev_h = np.dot(dbefore_act, Wh.T)         # (N, H)
+    dWx = np.dot(x.T, dbefore_act)              # (D, H)
+    dWh = np.dot(prev_h.T, dbefore_act)         # (H, H)
+    db = np.sum(dbefore_act, axis=0)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -104,7 +112,16 @@ def rnn_forward(x, h0, Wx, Wh, b):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, T, D = x.shape
+    H = b.shape[0]
+    h = np.zeros((N, T, H))
+    prev_h = h0
+    for t in range(T):
+        xt = x[:, t, :]
+        next_h, _ = rnn_step_forward(xt, prev_h, Wx, Wh, b)
+        h[:, t, :] = next_h
+        prev_h = next_h
+    cache = (x, h0, Wx, Wh, b, h)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -140,7 +157,35 @@ def rnn_backward(dh, cache):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, h0, Wx, Wh, b, h = cache
+
+    N, T, D = x.shape
+    H = b.shape[0]
+
+    next_h = h[:, T-1, :]
+
+    dprev_h = np.zeros((N, H))
+    dx = np.zeros((N, T, D))
+    dh0 = np.zeros((N, H))
+    dWx = np.zeros((D, H))
+    dWh = np.zeros((H, H))
+    db = np.zeros(H)
+
+    for t in range(T):
+        t = T - t - 1
+        xt = x[:, t, :]
+        if t == 0:
+            prev_h = h0
+        else:
+            prev_h = h[:, t-1, :]
+        step_cache = (xt, prev_h, Wx, Wh, b, next_h)
+        # why add dprev_h??
+        dnext_h = dh[:, t, :] + dprev_h
+        dx[:, t, :], dprev_h, dWxt, dWht, dbt = rnn_step_backward(dnext_h, step_cache)
+        next_h = prev_h
+        dWx, dWh, db = dWx+dWxt, dWh+dWht, db+dbt
+
+    dh0 = dprev_h
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -172,7 +217,19 @@ def word_embedding_forward(x, W):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    # naive edition
+    # N, T = x.shape
+    # V, D = W.shape
+    # out = np.zeros((N, T, D))
+    #
+    # for i in range(N):
+    #     for j in range(T):
+    #         out[i, j] = W[x[i, j]]
+
+    # simplified edition
+    out = W[x]
+
+    cache = (x, W)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################
@@ -205,7 +262,12 @@ def word_embedding_backward(dout, cache):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, W = cache
+    dW = np.zeros_like(W)
+    # ???
+    np.add.at(dW, x, dout)
+    # alternatively:
+    # np.add.at(dW, x.flatten(), dout.reshape(-1, dout.shape[2]))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ##############################################################################

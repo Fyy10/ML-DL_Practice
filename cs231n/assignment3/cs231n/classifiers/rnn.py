@@ -74,7 +74,6 @@ class CaptioningRNN(object):
         for k, v in self.params.items():
             self.params[k] = v.astype(self.dtype)
 
-
     def loss(self, features, captions):
         """
         Compute training-time loss for the RNN. We input image features and
@@ -142,7 +141,26 @@ class CaptioningRNN(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # (1)
+        affine_out, affine_cache = affine_forward(features, W_proj, b_proj)
+        # (2)
+        word_embedding_out, word_embedding_cache = word_embedding_forward(captions_in, W_embed)
+        # (3)
+        rnn_out, rnn_cache = rnn_forward(word_embedding_out, affine_out, Wx, Wh, b)
+        # (4)
+        temporal_affine_out, temporal_affine_cache = temporal_affine_forward(rnn_out, W_vocab, b_vocab)
+        # (5)
+        loss, dtemporal_affine_out = temporal_softmax_loss(temporal_affine_out, captions_out, mask)
+        # (4)
+        drnn_out, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(dtemporal_affine_out,
+                                                                                temporal_affine_cache)
+        # (3)
+        dword_embedding_out, daffine_out, grads['Wx'], grads['Wh'], grads['b'] = \
+            rnn_backward(drnn_out, rnn_cache)
+        # (2)
+        grads['W_embed'] = word_embedding_backward(dword_embedding_out, word_embedding_cache)
+        # (1)
+        dfeatures, grads['W_proj'], grads['b_proj'] = affine_backward(daffine_out, affine_cache)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -150,7 +168,6 @@ class CaptioningRNN(object):
         ############################################################################
 
         return loss, grads
-
 
     def sample(self, features, max_length=30):
         """
@@ -211,7 +228,24 @@ class CaptioningRNN(object):
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        N, D = features.shape
+        affine_out, affine_cache = affine_forward(features, W_proj, b_proj)
+
+        prev_word_idx = [self._start] * N   # [start, start, start, ...]
+        prev_h = affine_out
+
+        captions[:, 0] = self._start
+        for i in range(1, max_length):
+            # (1)
+            prev_word_embed = W_embed[prev_word_idx]
+            # (2)
+            next_h, rnn_step_cache = rnn_step_forward(prev_word_embed, prev_h, Wx, Wh, b)
+            # (3)
+            vocab_affine_out, vocab_affine_cache = affine_forward(next_h, W_vocab, b_vocab)
+            # (4)
+            captions[:, i] = list(np.argmax(vocab_affine_out, axis=1))
+            prev_word_idx = captions[:, i]
+            prev_h = next_h
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

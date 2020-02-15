@@ -261,6 +261,8 @@ def word_embedding_backward(dout, cache):
     ##############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
+    # x: (N, T)
+    # dout: (N, T, D)
     x, W = cache
     dW = np.zeros_like(W)
     # ???

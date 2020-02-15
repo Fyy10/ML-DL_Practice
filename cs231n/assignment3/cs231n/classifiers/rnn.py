@@ -146,17 +146,24 @@ class CaptioningRNN(object):
         # (2)
         word_embedding_out, word_embedding_cache = word_embedding_forward(captions_in, W_embed)
         # (3)
-        rnn_out, rnn_cache = rnn_forward(word_embedding_out, affine_out, Wx, Wh, b)
+        if self.cell_type == 'rnn':
+            rnn_lstm_out, rnn_lstm_cache = rnn_forward(word_embedding_out, affine_out, Wx, Wh, b)
+        elif self.cell_type == 'lstm':
+            rnn_lstm_out, rnn_lstm_cache = lstm_forward(word_embedding_out, affine_out, Wx, Wh, b)
         # (4)
-        temporal_affine_out, temporal_affine_cache = temporal_affine_forward(rnn_out, W_vocab, b_vocab)
+        temporal_affine_out, temporal_affine_cache = temporal_affine_forward(rnn_lstm_out, W_vocab, b_vocab)
         # (5)
         loss, dtemporal_affine_out = temporal_softmax_loss(temporal_affine_out, captions_out, mask)
         # (4)
-        drnn_out, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(dtemporal_affine_out,
-                                                                                temporal_affine_cache)
+        drnn_lstm_out, grads['W_vocab'], grads['b_vocab'] = temporal_affine_backward(dtemporal_affine_out,
+                                                                                     temporal_affine_cache)
         # (3)
-        dword_embedding_out, daffine_out, grads['Wx'], grads['Wh'], grads['b'] = \
-            rnn_backward(drnn_out, rnn_cache)
+        if self.cell_type == 'rnn':
+            dword_embedding_out, daffine_out, grads['Wx'], grads['Wh'], grads['b'] = \
+                rnn_backward(drnn_lstm_out, rnn_lstm_cache)
+        elif self.cell_type == 'lstm':
+            dword_embedding_out, daffine_out, grads['Wx'], grads['Wh'], grads['b'] = \
+                lstm_backward(drnn_lstm_out, rnn_lstm_cache)
         # (2)
         grads['W_embed'] = word_embedding_backward(dword_embedding_out, word_embedding_cache)
         # (1)
@@ -233,13 +240,18 @@ class CaptioningRNN(object):
 
         prev_word_idx = [self._start] * N   # [start, start, start, ...]
         prev_h = affine_out
+        prev_c = np.zeros(prev_h.shape)
 
         captions[:, 0] = self._start
         for i in range(1, max_length):
             # (1)
             prev_word_embed = W_embed[prev_word_idx]
             # (2)
-            next_h, rnn_step_cache = rnn_step_forward(prev_word_embed, prev_h, Wx, Wh, b)
+            if self.cell_type == 'rnn':
+                next_h, rnn_lstm_step_cache = rnn_step_forward(prev_word_embed, prev_h, Wx, Wh, b)
+            elif self.cell_type == 'lstm':
+                next_h, next_c, rnn_lstm_step_cache = lstm_step_forward(prev_word_embed, prev_h, prev_c, Wx, Wh, b)
+                prev_c = next_c
             # (3)
             vocab_affine_out, vocab_affine_cache = affine_forward(next_h, W_vocab, b_vocab)
             # (4)

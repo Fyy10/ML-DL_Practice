@@ -58,7 +58,10 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     loss = 0
 
     for ei in range(input_length):
+        # input_tensor: [seq_len, 1]
+        # input_tensor[ei]: [1]
         encoder_output, encoder_hidden = encoder(input_tensor[ei], encoder_hidden)
+        # encoder_output: [1, 1, hidden_dim]
         encoder_outputs[ei] = encoder_outputs[0, 0]
 
     decoder_input = torch.tensor([[SOS_token]], device=Config.device)
@@ -154,7 +157,7 @@ def evaluate(encoder, decoder, sentence, input_lang, output_lang, max_length=MAX
         decoded_words = []
 
         for di in range(max_length):
-            decoder_output, decoder_hidden = decoder(decoder_input, decoder_hidden)
+            decoder_output, decoder_hidden, attn_weights = decoder(decoder_input, decoder_hidden, encoder_outputs)
             topv, topi = decoder_output.data.topk(1)
             if topi.item() == EOS_token:
                 decoded_words.append('<EOS>')

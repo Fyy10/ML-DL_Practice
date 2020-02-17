@@ -12,9 +12,12 @@ class Encoder(nn.Module):
         self.gru = nn.GRU(hidden_size, hidden_size)     # embedding (hidden_size) -> hidden_dim (hidden_size)
 
     def forward(self, inp, hidden):
+        # inp: [1]
         embedded = self.embedding(inp).view(1, 1, -1)
+        # embedded: [1, 1, embedding_dim]
         output = embedded
         output, hidden = self.gru(output, hidden)
+        # output: [1, 1, hidden_dim]
         return output, hidden
 
     def initHidden(self):

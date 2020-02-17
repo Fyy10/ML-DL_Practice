@@ -8,4 +8,4 @@ class Config(object):
     embedding_dim = 256
     learning_rate = 0.1
     epoch = 1
-    max_length = 0
+    max_length = 10

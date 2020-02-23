@@ -40,7 +40,6 @@ class AttnDecoder(nn.Module):
         self.gru = nn.GRU(self.hidden_size, self.hidden_size)
         self.out = nn.Linear(self.hidden_size, self.output_size)
 
-    # todo: forward
     def forward(self, inp, hidden, encoder_outputs):
         embedded = self.embedding(inp).view(1, 1, -1)
         # embedded: [1, 1, embedding_dim]

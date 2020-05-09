@@ -1,0 +1,88 @@
+\ProvidesPackage{WeeklyReport}
+
+% 眉首眉脚
+\RequirePackage{fancyhdr}
+% 调色板
+\RequirePackage{xcolor-material}
+% 代码提示
+\RequirePackage{listings}
+% 版边边距
+\RequirePackage[left=2cm, right=2cm, bottom=2cm]{geometry}
+% 更加现代定理、引用提示
+\RequirePackage{tcolorbox}
+% 书签
+\RequirePackage[open, openlevel=2, atend]{bookmark}
+% 链接
+\RequirePackage{hyperref}
+% 选项相关
+\RequirePackage{xkeyval}
+
+% color
+\colorlet{PrimaryColor}{MaterialBlue900}
+
+% ctex settings
+\ctexset{
+  contentsname={目录},
+  section/format=\Large\bfseries\centering\color{PrimaryColor},
+  subsection/number={\textcolor{MaterialBlue900}{\thesubsection}},
+}
+
+% hyper links
+\hypersetup{
+  colorlinks=true,
+  linkcolor=MaterialPink,
+  urlcolor=MaterialBlue,
+  filecolor=MaterialGreen,
+}
+
+% code
+\tcbuselibrary{listings}
+
+\lstset{
+  frame=single,
+  frameround=tttt,
+  framesep=1pt,
+  framextopmargin=6pt,
+  framexbottommargin=6pt,
+  tabsize=4,
+  breaklines=true,
+  upquote=true,
+  captionpos=b,
+  basicstyle=\footnotesize,
+  backgroundcolor=\color{MaterialBlue50},
+  rulecolor=\color{MaterialBlue},
+  identifierstyle=\color{MaterialBlue800},
+  commentstyle=\itshape\color{MaterialGreen700},
+  stringstyle=\bfseries\color{MaterialAmber800},
+  keywordstyle=\bfseries\color{MaterialPurple700},
+  numberstyle=\bfseries\color{MaterialGrey800},
+}
+
+\lstdefinelanguage{javascript}{
+  morekeywords={const, let, class, Promise, try, catch, Error, async, await, super, constructor},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]',
+  morestring=[b]",
+  morestring=[b]`,
+}
+\lstalias{js}{javascript}
+
+% 页眉页脚设置
+\pagestyle{fancy}
+\fancyhead[L]{\textcolor{PrimaryColor}{\leftmark}}
+\fancyhead[C]{\textcolor{PrimaryColor}{第\zhnumber{\thepage}页}}
+\fancyhead[R]{\textcolor{PrimaryColor}{\rightmark}}
+\fancyfoot{}
+\renewcommand{\headrule}{\color{PrimaryColor}\hrule width\textwidth}
+
+%%% tcolorbox %%%
+\tcbuselibrary{theorems}
+\tcbuselibrary{skins}
+\tcbsetforeverylayer{enhanced}
+
+% 内联代码，单一颜色
+\providecommand\code[1]{%
+  \ttfamily\textcolor{MaterialPink}{#1}
+}

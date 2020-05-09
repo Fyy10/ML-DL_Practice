@@ -1,0 +1,207 @@
+\documentclass[UTF8]{ctexart}
+
+\usepackage{WeeklyReport}
+
+\title{周报01}
+\author{Jeff Fu}
+\date{\today}
+
+\begin{document}
+    \maketitle
+    % \tableofcontents
+    \section{学习内容}
+        \begin{itemize}
+            \item Multi-Source DA相关代码分析和学习（主要关注Loss）
+        \end{itemize}
+    \section{学习收获}
+        学习论文中出现的Loss的实现
+        \subsection{Moment Matching}
+            参考文章Moment Matching for Multi-Source Domain Adaptation的代码
+            \subsubsection{MMD}
+                $$
+                    MMD^2(X, Y) = \left\| {\frac{1}{M}\sum\limits_{i = 1}^M {\phi ({\rm{x}}_i) - } \frac{1}{N}\sum\limits_{j = 1}^N {\phi ({\rm{y}}_j)} } \right\|_\mathcal{H}^2
+                $$
+                \begin{verbatim}
+    def linear_mmd2(fx, fy):
+        loss = 0.0
+        delta = fx - fy
+        # 为什么存在错位？
+        loss = torch.mean((delta[0:-1] * delta[1:]).sum(1))
+        return loss
+
+    def poly_mmd2(fx, fy, d=2, alpha=1.0, c=2.0)
+        # kernel trick?
+        K_XX = (alpha * (fx[:-1] * fx[1:]).sum(1) + c)
+        K_XX_mean = torch.mean(K_XX.pow(d))
+    
+        K_YY = (alpha * (fy[:-1] * fy[1:]).sum(1) + c)
+        K_YY_mean = torch.mean(K_YY.pow(d))
+    
+        K_XY = (alpha * (fx[:-1] * fy[1:]).sum(1) + c)
+        K_XY_mean = torch.mean(K_XY.pow(d))
+    
+        K_YX = (alpha * (fy[:-1] * fx[1:]).sum(1) + c)
+        K_YX_mean = torch.mean(K_YX.pow(d))
+    
+        return K_XX_mean + K_YY_mean - K_XY_mean - K_YX_mean
+                \end{verbatim}
+            \subsubsection{K阶矩}
+                文章代码实现的k\_moment跟概率论中的K阶矩貌似有些差别？
+                \begin{verbatim}
+    # 欧氏距离
+    def L2(x1, x2):
+        # x1和x2是n维向量
+        return ((x1-x2)**2).sum().sqrt()
+    
+    # k moment
+    def k_moment(s1, s2, s3, s4, t, k):
+        # 固定源域的数量？（4）
+        s1 = (s1**k).mean(0)
+        s2 = (s2**k).mean(0)
+        s3 = (s3**k).mean(0)
+        # 为什么没有s4？（按论文公式应该需要下面这行）
+        s4 = (s4**k).mean(0)
+        t = (t**k).mean(0)
+
+        # 两两组合构成k阶矩（按论文公式这里应该还需要除以N，但这里没有除N）
+        return L2(s1, t) + L2(s2, t) + L2(s3, t) + \
+            L2(s1, s2) + L2(s2, s3) + L2(s3, s1) + \
+            L2(s4, s1) + L2(s4, s2) + L2(s4, s2) + \
+            L2(s4, t)
+                \end{verbatim}
+
+                代码中还实现了一个regularizer（用于规范化？）
+                \begin{verbatim}
+    def msda_regularizer(s1, s2, s3, s4, t, belta_moment):
+        print('s1:{}, s2:{}, s3:{}, t:{}'.format(s1.shape, s2.shape, s3.shape, t.shape))
+        # s1, s2, s3, t: (128, 2048)
+        # 在这里仍然只用了三个Source？
+        s1_mean = s1.mean(0)
+        s2_mean = s2.mean(0)
+        s3_mean = s3.mean(0)
+        t_mean = t.mean(0)
+        s1 = s1 - s1_mean
+        s2 = s2 - s2_mean
+        s3 = s3 - s3_mean
+        t = t - t_mean
+        moment1 = L2(s1, t) + L2(s2, t) + L2(s3, t) + \
+            L2(s1, s2) + L2(s2, s3) + L2(s3, s1) + \
+            L2(s4, s1) + L2(s4, s2) + L2(s4, s2) + \
+            L2(s4, t)
+        reg_info = moment1
+        # print(reg_info)
+        for i in range(belta_moment - 1):
+            # s1, s2, s3, s4, t, k
+            reg_info += k_moment(s1, s2, s3, s4, t, i+2)
+
+        return reg_info/6
+        # return L2(s1, t)
+                \end{verbatim}
+            \subsubsection{数据处理}
+                Digit-Five数据集比较方便获得，所以先尝试用Digit-Five进行测试
+
+                下载后得到的是已经预处理过的mat文件
+                \begin{verbatim}
+    # 读取数据(以mnist为例)
+    def load_mnist(scale=True):
+        mnist_data = loadmat(base_dir + '/mnist_data.mat')
+        """
+        raw data的shape如下
+        train_28 (55000, 28, 28, 1)
+        test_28 (10000, 28, 28, 1)
+        train_32 (55000, 32, 32)
+        test_32 (10000, 32, 32)
+        label_train (55000, 10)
+        label_test (10000, 10)
+        """
+        if scale:   # 32x32
+            mnist_train = np.reshape(mnist_data['train_32'], (55000, 32, 32, 1))
+            mnist_test = np.reshape(mnist_data['test_32'], (10000, 32, 32, 1))
+            mnist_train = np.concatenate([mnist_train, mnist_train, mnist_train], 3)
+            mnist_test = np.concatenate([mnist_test, mnist_test, mnist_test], 3)
+            mnist_train = mnist_train.transpose(0, 3, 1, 2).astype(np.float32)
+            mnist_test = mnist_test.transpose(0, 3, 1, 2).astype(np.float32)
+            mnist_labels_train = mnist_data['label_train']
+            mnist_labels_test = mnist_data['label_test']
+        else:   # 28x28
+            mnist_train = mnist_data['train_28']
+            mnist_test =  mnist_data['test_28']
+            mnist_labels_train = mnist_data['label_train']
+            mnist_labels_test = mnist_data['label_test']
+            mnist_train = mnist_train.astype(np.float32)
+            mnist_test = mnist_test.astype(np.float32)
+            mnist_train = mnist_train.transpose((0, 3, 1, 2))
+            mnist_test = mnist_test.transpose((0, 3, 1, 2))
+        train_label = np.argmax(mnist_labels_train, axis=1)
+        # 随机排序
+        inds = np.random.permutation(mnist_train.shape[0])
+        mnist_train = mnist_train[inds]
+        train_label = train_label[inds]
+        test_label = np.argmax(mnist_labels_test, axis=1)
+    
+        mnist_train = mnist_train[:25000]
+        train_label = train_label[:25000]
+        mnist_test = mnist_test[:25000]
+        test_label = test_label[:25000]
+        print('mnist train X shape->', mnist_train.shape)   # (25000, 3, 32, 32)
+        print('mnist train y shape->', train_label.shape)   # (25000,)
+        print('mnist test X shape->', mnist_test.shape)     # (10000, 3, 32, 32)
+        print('mnist test y shape->', test_label.shape)     # (10000,)
+
+        return mnist_train, train_label, mnist_test, test_label
+                \end{verbatim}
+
+                用同样方法读取其它domain的data，测试得到其它domain的shape如下
+                \begin{lstlisting}
+    # mnist_m
+    train (55000, 28, 28, 3)
+    test (10000, 28, 28, 3)
+    label_train (55000, 10)
+    label_test (10000, 10)
+    mnist_m train X shape-> (25000, 3, 28, 28)
+    mnist_m train y shape-> (25000,)
+    mnist_m test X shape-> (9000, 3, 28, 28)
+    mnist_m test y shape-> (9000,)
+    # usps
+    img_train (7438, 1, 28, 28)
+    label_train (7438, 1)
+    img_test (1860, 1, 28, 28)
+    label_test (1860, 1)
+    usps train X shape-> (29752, 1, 28, 28)
+    usps train y shape-> (29752,)
+    usps test X shape-> (1860, 1, 28, 28)
+    usps test y shape-> (1860,)
+    # synth_number
+    syn_train (25000, 32, 32, 3)
+    syn_test (9000, 32, 32, 3)
+    syn_label_train (25000, 1)
+    syn_label_test (9000, 1)
+    syn number train X shape-> (25000, 3, 32, 32)
+    syn number train y shape-> (25000,)
+    syn number test X shape-> (9000, 3, 32, 32)
+    syn number test y shape-> (9000,)
+    # svhn
+    syhn_train_img (32, 32, 3, 73257)
+    svhn_train_label (73257, 1)
+    svhn_test_img (32, 32, 3, 26032)
+    svhn_test_label (26032, 1)
+    svhn train X shape-> (25000, 3, 32, 32)
+    svhn train y shape-> (25000,)
+    svhn test X shape-> (9000, 3, 32, 32)
+    svhn test y shape-> (9000,)
+                \end{lstlisting}
+            \subsubsection{试运行}
+                经过一些修改之后，将模型跑通了，在训练前期可以观察到Loss的下降，一段时间后出现
+                BrokenPipeError
+                （查资料显示可能原因在于Windows环境中的多线程处理问题，而本地Linux虚拟机不支持CUDA，所以没有进一步测试）
+                \begin{lstlisting}
+    Train Epoch: 0 [0/100 (0%)] Loss1: 5.847885  Loss2: 5.929170 Discrepancy: 0.028762
+    Train Epoch: 0 [100/100 (0%)] Loss1: 0.640006  Loss2: 0.655498 Discrepancy: 0.004664
+    BrokenPipeError: [Errno 32] Broken pipe
+                \end{lstlisting}
+    \section{疑问/困难}
+        \begin{enumerate}
+            \item 某些代码的实现与原文有些出入，按照自己的理解进行了修改
+            \item 训练的时候出现BrokenPipeError，可能Windows多线程处理出现问题
+        \end{enumerate}
+\end{document}

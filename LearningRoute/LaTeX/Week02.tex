@@ -1,0 +1,249 @@
+\documentclass[UTF8]{ctexart}
+
+\usepackage{WeeklyReport}
+
+\title{周报02}
+\author{Jeff Fu}
+\date{\today}
+
+\begin{document}
+    \maketitle
+    % \tableofcontents
+    \section{学习内容}
+        \begin{itemize}
+            \item 模仿Multi-Source DA的代码，实现对应的模型
+        \end{itemize}
+    \section{学习收获}
+        仍然是Moment Matching for Multi-Source Domain Adaptation这篇文章，
+        上周学习了Loss和数据读取的部分，这周把模型和优化的部分看懂，然后模仿着实现这个模型。
+
+        为了方便在本地进行测试，针对Windows环境进行了一些修改，现在已经可以完整地跑完一个epoch。
+
+        代码中的C1和C2分别表示论文中的C和C'，而不同source的classifier其实是share weight的（原文好像没有提这一点）
+        \subsection{Model}
+            M3SDA模型的实现。
+            \subsubsection{Argparser}
+                在\text{main.py}中，使用argparser进行模型总体参数的设置。
+                \begin{itemize}
+                    \item record\_folder: 记录文件的保存地址
+                    \item batch\_size
+                    \item checkpoint\_dir: 模型的保存地址
+                    \item optimizer: 选择优化器
+                    \item source: 选择的源域（从代码上看，这个参数并没有用上）
+                    \item target: 选择的目标域
+                    \item eval\_only: 进行评估
+                \end{itemize}
+
+                代码中的argparse的实现没有什么特别的，所以没有列出来。
+            \subsubsection{Solver}
+                在文中有提到，M3SDA的训练涉及到一个feature extractor（在代码中用generator G表示）
+                和两个classifier（分别为C和C'，在代码中是C1和C2）。G需要减小discrepancy而C'需要增大discrepancy。
+
+                训练时所使用的优化公式为（代码中并没有使用$\lambda$）：
+                $$
+                \min_{G,\mathcal C}\sum_{i=1}^{N}\mathcal L_{\mathcal D_i} + \lambda \min_{G}MD^2(\mathcal D_S,\mathcal D_T)
+                $$
+
+                $$
+                \min_{\mathcal C'}\sum_{i=1}^{N}\mathcal L_{\mathcal D_i} - \sum_{i}^N |P_{C_i}(D_T)-P_{C_i'}(D_T)|
+                $$
+
+                $$
+                \min_{G} \sum_{i}^N |P_{C_i}(D_T)-P_{C_i'}(D_T)|
+                $$
+
+                模型的主要代码如下（对代码的理解写成了注释）：
+                \begin{verbatim}
+    def feat_all_domain(self, img_s1, img_s2, img_s3, img_s4, img_t):
+        return self.G(img_s1), self.G(img_s2), self.G(img_s3), \
+            self.G(img_s4), self.G(img_t)
+
+    def C1_all_domain(self, feat_s1, feat_s2, feat_s3, feat_s4, feat_t):
+        return self.C1(feat_s1), self.C1(feat_s2), self.C1(feat_s3), \
+            self.C1(feat_s4), self.C1(feat_t)
+
+    def C2_all_domain(self, feat_s1, feat_s2, feat_s3, feat_s4, feat_t):
+        return self.C2(feat_s1), self.C2(feat_s2), self.C2(feat_s3), \
+            self.C2(feat_s4), self.C2(feat_t)
+
+    # returns a tuple of loss
+    # out: output, l: label
+    def softmax_loss_all_domain(self, out1, out2, out3, out4, l1, l2, l3, l4):
+        # criterion
+        L = nn.CrossEntropyLoss().cuda()
+        return L(out1, l1), L(out2, l2), L(out3, l3), L(out4, l4)
+
+    # overall loss
+    # i: image, l: label
+    def loss_all_domain(self, i1, i2, i3, i4, it, l1, l2, l3, l4):
+        # feature
+        f1, f2, f3, f4, ft = self.feat_all_domain(i1, i2, i3, i4, it)
+        # out c1
+        o1c1, o2c1, o3c1, o4c1, otc1 = self.C1_all_domain(f1, f2, f3, f4, ft)
+        # out c2
+        o1c2, o2c2, o3c2, o4c2, otc2 = self.C2_all_domain(f1, f2, f3, f4, ft)
+        loss_msda = 5e-4 * msda.msda_regulizer(f1, f2, f3, f4, ft, 5)
+        # loss
+        loss_s1_c1, loss_s2_c1, loss_s3_c1, loss_s4_c1 = self.softmax_loss_all_domain(
+            o1c1, o2c1, o3c1, o4c1, l1, l2, l3, l4
+        )
+        loss_s1_c2, loss_s2_c2, loss_s3_c2, loss_s4_c2 = self.softmax_loss_all_domain(
+            o1c2, o2c2, o3c2, o4c2, l1, l2, l3, l4
+        )
+        return loss_s1_c1, loss_s2_c1, loss_s3_c1, loss_s4_c1, \
+            loss_s1_c2, loss_s2_c2, loss_s3_c2, loss_s4_c2, loss_msda
+
+    def train_MSDA(self, epoch, record_file=None):
+        criterion = nn.CrossEntropyLoss()
+        self.G.train()
+        self.C1.train()
+        self.C2.train()
+        # 设置随机数种子
+        torch.cuda.manual_seed(1)
+
+        for batch_idx, data in enumerate(self.datasets):
+            # 取数据
+            img_t = data['T'].cuda()
+            img_s1 = data['S1'].cuda()
+            img_s2 = data['S2'].cuda()
+            img_s3 = data['S3'].cuda()
+            img_s4 = data['S4'].cuda()
+            label_s1 = data['S1_label'].long().cuda()
+            label_s2 = data['S2_label'].long().cuda()
+            label_s3 = data['S3_label'].long().cuda()
+            label_s4 = data['S4_label'].long().cuda()
+
+            # 判断最后一部分不构成batch的数据
+            if img_s1.size(0) < self.batch_size or img_s2.size(0) < self.batch_size or \
+                    img_s3.size(0) < self.batch_size or img_s4.size(0) < self.batch_size or \
+                    img_t.size(0) < self.batch_size:
+                break
+
+            # zero grad
+            self.reset_grad()
+
+            # loss c1 c2 msda
+            loss_s1_c1, loss_s2_c1, loss_s3_c1, loss_s4_c1, \
+                loss_s1_c2, loss_s2_c2, loss_s3_c2, loss_s4_c2, loss_msda =\
+                self.loss_all_domain(img_s1, img_s2, img_s3, img_s4, img_t, \
+                abel_s1, label_s2, label_s3, label_s4)
+
+            # loss source
+            loss_s_c1 = loss_s1_c1 + loss_s2_c1 + loss_s3_c1 + loss_s4_c1
+            loss_s_c2 = loss_s1_c2 + loss_s2_c2 + loss_s3_c2 + loss_s4_c2
+
+            # over all loss
+            # 这个地方在原文中是加权相加，而代码中貌似没有体现加权
+            loss = loss_s_c1 + loss_s_c2 + loss_msda
+
+            loss.backward()
+            
+            # 整体的优化
+            self.opt_g.step()
+            self.opt_c1.step()
+            self.opt_c2.step()
+
+            # classifier要增大discrepancy，feature extractor要减小discrepancy
+            self.reset_grad()
+            loss_s1_c1, loss_s2_c1, loss_s3_c1, loss_s4_c1, \
+                loss_s1_c2, loss_s2_c2, loss_s3_c2, loss_s4_c2, loss_msda =\
+                self.loss_all_domain(img_s1, img_s2, img_s3, img_s4, img_t, \
+                label_s1, label_s2, label_s3, label_s4)
+
+            feature_t = self.G(img_t)
+            out_t1 = self.C1(feature_t)
+            out_t2 = self.C2(feature_t)
+
+            # loss source
+            loss_s_c1 = loss_s1_c1 + loss_s2_c1 + loss_s3_c1 + loss_s4_c1
+            loss_s_c2 = loss_s1_c2 + loss_s2_c2 + loss_s3_c2 + loss_s4_c2
+
+            # over all loss
+            loss_s = loss_s_c1 + loss_s_c2 + loss_msda
+
+            # discrepancy
+            loss_dis = self.discrepancy(out_t1, out_t2)
+            loss = loss_s - loss_dis
+            loss.backward()
+            # 固定G，优化C，增大discrepancy
+            # self.opt_g.step()
+            self.opt_c1.step()
+            self.opt_c2.step()
+
+            # 这里循环4次的意义不知道在哪里……
+            for i in range(4):
+                self.reset_grad()
+                feature_t = self.G(img_t)
+                out_t1 = self.C1(feature_t)
+                out_t2 = self.C2(feature_t)
+                loss_dis = self.discrepancy(out_t1, out_t2)
+                loss_dis.backward()
+                # 固定C，优化G，减小discrepancy
+                self.opt_g.step()
+        return batch_idx
+                \end{verbatim}
+
+                这里的G，C1和C2都是比较常规的架构（G使用三层CNN和两层FC，C使用一层FC）
+
+                代码中也实现了梯度反转层，但是在模型的forward的过程中并没有使用，目前对这一块的理解还不到位
+
+                \begin{verbatim}
+    from torch.autograd import Function
+
+    # 梯度反转层
+    class GradReverse(Function):
+        def __init__(self, lambd):
+            self.lambd = lambd
+
+        def forward(self, x):
+            # 为什么不直接返回x？（因为需要x参加计算？）
+            return x.view_as(x)
+
+        def backward(self, grad_output):
+            return grad_output * -self.lambd
+
+    def grad_reverse(x, lambd=1.0):
+        return GradReverse(lambd)(x)
+                \end{verbatim}}
+                
+                至于测试部分，代码跟train比较像，只是没有使用C2（C'）。
+        \subsection{试运行}
+            将代码的其余部分（数据读取等）补充完整，试着运行了一下，
+            这次解决了之前多线程处理的问题，可以完整地跑完epoch和测试。
+
+            如果把svhn作为target，把mnist、mnistm、usps、syn作为source，
+            训练几个epoch，可以看到测试的正确率在上升，模型收敛的速度比较快，
+            可能是因为在原代码中的默认参数设置得比较好。
+            \begin{lstlisting}
+    python main.py --target svhn
+    Dataset Loading...
+    ......
+    Load Finished!
+    Model Loaded (1 G 2 C)!
+    Initialization Completed.
+
+    0
+    Train Epoch: 0 [0/100 (0%)]     Loss1: 5.880786  Loss2: 5.789978    Discrepancy: 0.029394
+    Train Epoch: 0 [100/100 (0%)]   Loss1: 0.574418  Loss2: 0.574782    Discrepancy: 0.004905
+    Test set: Average loss: -0.0319, Accuracy C1: 6201/9000 (69%)
+
+    1
+    Train Epoch: 1 [0/100 (0%)]     Loss1: 0.246108  Loss2: 0.243026    Discrepancy: 0.003677
+    Train Epoch: 1 [100/100 (0%)]   Loss1: 0.338004  Loss2: 0.333200    Discrepancy: 0.002567
+    Test set: Average loss: -0.0305, Accuracy C1: 6573/9000 (73%)
+
+    2
+    Train Epoch: 2 [0/100 (0%)]     Loss1: 0.270224  Loss2: 0.264725    Discrepancy: 0.002441
+    Train Epoch: 2 [100/100 (0%)]   Loss1: 0.290649  Loss2: 0.292531    Discrepancy: 0.002519
+    Test set: Average loss: -0.0304, Accuracy C1: 6625/9000 (74%)
+            \end{lstlisting}
+
+            可以看到，经过3个epoch后，正确率达到了74\%左右，
+            考虑到时间原因，没有继续往下训练。
+    \section{疑问/困难}
+        \begin{enumerate}
+            \item 和之前一样，代码中的实现跟论文的描述有些区别
+            \item 感觉上有一些代码是“冗余”的，在训练和测试的时候并没有用到
+            \item 有不止一篇文章提到了梯度反转层（这次看的代码里也有体现），但目前对这个的作用还不太理解
+        \end{enumerate}
+\end{document}

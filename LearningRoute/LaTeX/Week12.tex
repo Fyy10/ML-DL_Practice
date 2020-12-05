@@ -1,0 +1,135 @@
+\documentclass[UTF8]{ctexart}
+
+\usepackage{WeeklyReport}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\title{周报12}
+\author{傅阳烨}
+\date{\today}
+
+\begin{document}
+\maketitle
+% \tableofcontents
+\section{本周计划}
+\begin{itemize}
+    \item proposal思路梳理，method简述
+    \item 实验进度及结果
+\end{itemize}
+
+\section{Proposal}
+
+在多源领域适应中，假设所有 source domain 的并集能够包含 target 的所有信息，而 target 的特征只是其中一部分，
+强行把 target 的特征与整个 feature map 进行对齐反而会影响分类器的判断，所以提出只进行部分特征的对齐。
+
+对于不同的类别和域，期望在选择后的特征图上，保持源域与目标域接近，域的类别内数据聚集，而不同类别之间需要有一定差异，因此提出类别分布损失。
+
+一些与数据的中心点差距过大的样本，对训练有干扰，训练的时候跳过，不进行参数更新。
+
+\subsection{Method}
+
+经过特征提取，得到 feature map，在 feature map 上使用一个部分特征对齐的网络，得到提纯后的特征（选取 target 所具有的特征），对于 target 则不需要进行特征选择。
+
+特征提取器提取的特征需要是容易分辨的，且相同的类别应当比较靠近，用同一类别的特征平均值当作中心点，用流动平均值维护中心点，target 的类别由 pseudo label 确定，
+用 loss 限制相同类别的数据在提纯后的特征上靠近，不同类别的数据的中心点相互分离。对于偏离中心点过多的数据，设置一个 threshold，threshold 由 target 与 source 的相关性得到，距离高于 threshold 的样本不进行参数 update，threshold 也用流动平均值去维护。
+
+由于分类器早期产生的 pseudo label 不可靠，与 target label 相关的 loss 所占权重在训练过程中从0开始逐渐增加（可使用 arctan 等函数）。
+
+在假设情况下，分类器所看到的 feature map 中，source 和 target 的同一类型的数据应当映射到一起。
+
+\subsection{分析}
+
+\subsubsection{部分特征的选择}
+
+从最简单的形式去考虑，特征选择向量是一个01串，用来表示是否选择某个特征，而实际情况下对于某个特征是否选择不能一刀切，而是用一定的权重去表示其重要性，或者说某一个特征维度与 target 的相关性。
+
+因此用一个 NN 的结构去学习这个特征筛选向量。
+
+在 feature map 上，某个 source 特征维度与 target 的相关性可以用其与 target 的距离来体现，由于是按维度计算差异，所以使用绝对值差异：
+
+$$
+dist = |f_s - f_t|
+$$
+
+其中 $f_s, f_t$ 分别为 source 和 target 的特征。
+
+加权向量 $v$ 则由 NN （暂时称作PAN）学习得到：
+
+$$
+v = PAN(dist)
+$$
+
+那么提纯后的特征 $f_{s,ex} = f_s v$，对于每一个source domain 都生成一个 $v$，对于 $f_t$ 则不需要用 $v$ 加权。
+
+为了防止 $v$ 出现零解或者无穷解，用规则化限制 $v$，其中 $v$ 由所有 source domain 的平均值表示：
+
+$$
+R(v) = \sum(1 - \bar{v})^2
+$$
+
+用高阶矩来作为 PAN 的 Loss：
+
+$$
+L_{PAN}(\mathcal{D}_S, \mathcal{D}_T) = \sum_i(\|\mathbb{E}(f_{si,ex}^k) - \mathbb{E}({f_t}^k)\|_2) + \sum_i\sum_j(\|\mathbb{E}(f_{si,ex}^k) - \mathbb{E}(f_{sj,ex}^k)\|_2)
+$$
+
+\subsubsection{同类聚集，不同类排斥}
+
+相同类别的数据，用平方和当作 loss，定义类别的中心 $f_c^1 = \frac{1}{N}\sum(f_s^1)$，用 moving average 去维护：
+
+$$
+f_c^i = \beta_{center} f_c^{i-1} + (1-\beta_{center}) \frac{1}{N}\sum(f_s^i)
+$$
+
+其中 $i$ 为 batch 的编号，$N$ 表示某个 batch 中对应 class 的样本个数，每一个 domain 的每一个 class 对应一个 center。
+
+计算类别内数据与中心的距离作为 class Loss：
+
+$$
+L_{class} = \sum_i(\sum_j(f_c - f_s)^2)
+$$
+
+其中 $i$ 表示 domain 编号，j 表示类别编号。
+
+还需要定义一个 domain 之间的 loss，用于将 source 与 target 拉近：
+
+$$
+L_{domain} = \sum_i(f_t - f_{ci})^2
+$$
+
+其中 $i$ 表示 source domain 的编号。
+
+对于 target 的不同类别的数据，以类别的中心作为代表，计算如下 Loss，其中 $x$ 表示 feature：
+
+$$
+r_{ij} = \sqrt{\sum(x_i - x_j)}
+$$
+
+$$
+L_{dis} = \sum_i\sum_j(B - r_{ij})^2
+$$
+
+其中 $B$ 为超参，用于设置不同类别中心点的离散程度，限制不同类别的数据中心点不能相隔太近，
+并且不会距离太远导致无穷解。
+
+\subsubsection{使用 threshold 选择性学习}
+
+设置 threshold 的时候应选取上界。
+
+对于每个 class 分别设置 threshold。
+
+source 与 target 的中心点之间的欧氏距离作为 domain threshold，source 内部的数据与 class 中心点的距离作为 class threshold，
+两个 threshold 都用 moving average 去更新。
+
+\section{实验}
+
+目前已经实现了除 threshold 以外的代码并跑通，现在包含四个 loss 的模型还在服务器上训练。
+
+\section{疑问/困难}
+
+\begin{enumerate}
+    \item 如果在线进行数据蒸馏（设置 threshold 的方法），需要在一个 batch 中，只有一部分数据对模型的参数更新产生作用，目前还没有想好该怎么实现。
+\end{enumerate}
+
+\end{document}

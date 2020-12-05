@@ -1,0 +1,208 @@
+\documentclass[UTF8]{ctexart}
+
+\usepackage{WeeklyReport}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\title{周报11}
+\author{傅阳烨}
+\date{\today}
+
+\begin{document}
+\maketitle
+% \tableofcontents
+\section{进度汇总}
+\begin{itemize}
+    \item 看过的论文及其思路
+    \item 适用于多源领域自适应的思路
+    \item 实验进度
+    \item 这周看的文章
+\end{itemize}
+
+\section{相关论文}
+
+\subsection{Mutual Mean-Teaching: Pseudo Label Refinery for Unsupervised Domain Adaptation on Person Re-identification (ICLR2020)}
+
+有代码（pytorch）
+
+提出了同步平均教学（Mutual Mean Teaching, MMT），用软标签去代替原先的硬标签，即标签的值可以介于01之间。
+硬标签用聚类算法离线生成，软标签用网络在训练过程中在线生成。
+
+\subsection{HoMM: Higher-order Moment Matching for Unsupervised Domain Adaptation (AAAI2020)}
+
+有代码（tensorflow）
+
+提出 Loss 的计算可以使用更高阶的矩，证明了一阶矩对应 MMD，二阶矩对应 CORAL，然后再引入高阶矩进行域差异的计算，然后使用分组和随机取样的方式减少训练时间。
+
+\subsection{Multi-Source Domain Adaptation for Text Classification via DistanceNet-Bandits (AAAI2020)}
+
+无代码
+
+比较各种 distance-based 的 measure，融合起来作为新的 loss，训练的时候动态切换各个 source domain。
+
+\subsection{Multi-source Domain Adaptation for Visual Sentiment Classification (AAAI2020)}
+
+无代码
+
+寻找句子的 latent space，使用 translation 和 reconstruction 将 domain 映射到 latent space 中，使其具有相似的分布并保留各自的信息，
+基于 VAE 和 GAN。
+
+\subsection{Multi-source Distilling Domain Adaptation (AAAI2020)}
+
+有代码（tensorflow）
+
+提出 MDDA 网络，每个源域先分别各自训练，再用对抗性的方法把目标域映射到每个源域的 feature space 上，选取里 target 较近的 source 进行分类器微调，分类器再分别预测然后加权整合。
+
+\subsection{Multi-source Domain Adaptation for Semantic Segmentation (NIPS2019)}
+
+有代码（pytorch）
+
+使用的是对抗性的方法，为每个 source 生成一个 adapted domain，设计 discriminator 将 adapted domain 整合成一个 aggregated domain，
+在特征层面上用 aggregated domain 与 target 进行对齐。使用电脑生成的数据和真实数据进行训练。
+
+\subsection{Moment Matching for Multi-Source Domain Adaptation (ICCV2019)}
+
+有代码（pytorch）
+
+这是我想作为 baseline 的模型，使用了 Digit-Five 数据集和一个新提出的 DomainNet 数据集，
+使用矩匹配来进行 transfer，训练的时候使用了两个分类器，原模型结构较为简单。
+
+\subsection{Joint Deep Cross-Domain Transfer Learning for Emotion Recognition}
+
+无代码
+
+针对情感识别的任务，使用 visual 和 audio 两种数据，任务比较特殊（目前应该还没有正式发表出来）。
+
+\subsection{Multi-Domain Adversarial Learning (ICLR2019)}
+
+有代码（torch）
+
+使用对抗训练的方式考虑类别不对称的问题，对无标签的数据进行排序，确认无标签的数据是否是已知的类型。
+
+\subsection{Algorithms and Theory for Multiple-Source Adaptation (NIPS2018)}
+
+无代码
+
+考虑不同分布的加权问题，每个 source domain 分别使用一个 predictor，再进行加权。
+
+\subsection{Adversarial Multiple Source Domain Adaptation (NIPS2018)}
+
+有代码（pytorch）
+
+训练的过程包含特征提取，域分类和任务学习，类似于用多个 classifier 然后取平均。提出了 hard 和 soft 两个模型，分别对最差的和平均的 risk 进行优化。
+
+\subsection{Boosting Domain Adaptation by Discovering Latent Domains (CVPR2018)}
+
+有代码（pytorch + cuda）
+
+首先找到 latent domain，再用 latent domain 通过 domain alignment 得到 target classifier。
+训练的时候使用 domain prediction 和 domain classification 两个 branch，测试的时候只使用 classification。
+
+\subsection{Deep Cocktail Network: Multi-source Unsupervised Domain Adaptation with Category Shift (CVPR2018)}
+
+有代码（pytorch）
+
+解决不同的域之间可能存在的 category shift 的问题，将 target 的分布看作 source 的加权组合，利用 target 属于某个 source 的困惑值对 target 分类得到伪标签。
+
+\subsection{Temporal Ensembling for Semi-Supervised Learning}
+
+有代码（tensorflow）
+
+使用 teacher，student 模型，teacher 和 student 分别使用不同的数据增强手段，并在两者之间设计一致性损失。
+由于 teacher 初期并不可靠，可以使用最近几个 epoch 的预测结果生成 teacher（目前好像还没有正式发表出来）。
+
+\subsection{Mean teachers are better role models: Weight-averaged consistency targets improve semi-supervised deep learning results (NIPS2017)}
+
+有代码（pytorch，tensorflow）
+
+teacher 和 student 都对 input 进行预测，使用不同的 noise，更新参数时，student 先更新，teacher 的参数再通过指数级流动平均值得到。
+
+\subsection{Deep Mutual Learning (CVPR2018)}
+
+有代码（tensorflow，pytorch）
+
+与传统的知识蒸馏所使用的大网络不同，Deep Mutual Learning 使用两个小网络互相学习，设计两个交互损失，交替迭代更新两个网络的参数。
+
+\subsection{Concrete Autoencoders for Differentiable Feature Selection and Reconstruction (ICML2019)}
+
+有代码（keras，tensorflow）
+
+使用 concrete selection layer 作为 encoder，concrete selection layer 类似一种映射，通过退火公式保证这个映射是 sparse 的，从而达到特征选择的目的。
+
+\subsection{Implicit Class-Conditioned Domain Alignment for Unsupervised Domain Adaptation (ICML2020)}
+
+有代码（pytorch）
+
+用集合的方法去考虑域标签不平衡以及不同域之间类分布漂移的问题，通过域特有的类对样本的域标签进行确定。
+
+\subsection{Reciprocal Multi-Layer Subspace Learning for Multi-View Clustering (ICCV2019)}
+
+有代码（matlab）
+
+在多个视角的数据中寻找共识，先得到每个 view 各自的子空间表示，然后使用一个 encoding network 得到综合的 latent space。
+
+\subsection{Learning to Transfer Examples for Partial Domain Adaptation (CVPR2019)}
+
+有代码（pytorch）
+
+使用样本的交叉熵损失对 target example 的预测不确定性进行量化，主要用于去除 source 中不属于 target 类别的 example，学习 source 中与 target 相关的 example。
+
+\section{准备测试的思路}
+
+\subsection{Partial Alignment Loss}
+
+自己设计的一个 loss 函数，主要是想针对 source domain 在 feature map 上进行部分特征的对齐。每个 source domain 会包含 target 的一部分特征，
+所有 source 特征的并集应当包含 target 的所有特征，因此在进行特征对齐的时候，只需要对齐与 target 相关的那部分特征，而其它特征不应该被对齐。
+
+在特征空间中，把与 target 的特征数值较为接近的那些维度看作 target 所具有的特征，对这部分特征进行对齐。
+
+\subsection{Negative Purpose Network (NPN)}
+
+自己设计的一个结构，放在特征提取的最后一层，用来给特征空间添加细小的负面影响，从而使分类器所得到的特征更难分辨，在正确训练后，分类器的分辨能力应该比原来更强。
+
+使用 regularization 的方法确保 NPN 只会对特征层产生较小的影响。
+
+\subsection{Teacher Student Model}
+
+看过的论文里提到的方法，用 teacher 去指导 student 进行学习，打算用带 NPN 的网络作为学生，不带 NPN 的网络作为老师。
+
+\subsection{Mutual Learning}
+
+在不同的 source domain 之间进行 mutual learning，得到更好的特征图，然后再用前面的方法进行特征选择和对齐。
+
+\subsection{退火过程}
+
+使用前面文章中提到的退火公式来辅助 PAL 的训练过程，确保稀疏性。
+
+\subsection{预训练模型}
+
+有些论文使用了预训练的 AlexNet 或者 ResNet，可以用这个作为特征提取器。
+
+\section{实验进度}
+
+\subsection{Partial Alignment Loss (PAL)}
+
+写完了代码，做完了 Digit-Five 数据集的测试，比原模型的结果要好大约 $1\% \sim 2\%$。
+
+\subsection{Negative Purpose Network (NPN)}
+
+写完了代码，做了 Digit-Five 数据集的测试，从结果上看（无论是否使用 PAL），如果 NPN 使用全连接层，正确率约 $10\%$ （相当于随机），
+可能代码实现方面存在问题，也可能本身就不能用全连接层；如果 NPN 使用 noise，正确率与原模型大致相同。
+
+\section{这周看的文章}
+
+ECCV 新出了几篇多源领域适应相关的文章，这周看了其中一篇关于知识聚集（knowledge aggregation）的文章。
+
+\subsection{Learning to Combine: Knowledge Aggregation for Multi-Source Domain Adaptation (ECCV2020)}
+
+文章提供了 pytorch 代码。
+
+\section{疑问/困难}
+
+\begin{enumerate}
+    \item 代码需要重构一下，前面都是以 if 的方式把新思路添加进原代码，造成很多冗余的部分
+    \item ECCV 新出的这篇文章也使用了 Digit-Five 和 DomainNet 这两个数据集，并且有非常显著的提升（平均约 4\%），当前我所得到的结果显然是不够有力的，接下来需要加快各种思路的实验进度了
+\end{enumerate}
+
+\end{document}
